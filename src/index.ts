@@ -76,6 +76,10 @@ function envSetupLines(): string[] {
   const lines: string[] = [];
   for (const [key, value] of Object.entries(process.env)) {
     if (value === undefined) continue;
+    // Never forward Electron's Node shim flags: with ELECTRON_RUN_AS_NODE=1 the
+    // relaunched executable runs as plain node (no window), which is exactly the
+    // "restart does nothing" symptom this plugin had.
+    if (key === 'ELECTRON_RUN_AS_NODE' || key === 'NODE_OPTIONS' || key === 'ELECTRON_NO_ATTACH_CONSOLE') continue;
     // Only names PowerShell can address as Env:<name>.
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
     lines.push('Set-Item -LiteralPath ' + quotePs('Env:' + key) + ' -Value ' + quotePs(value));
