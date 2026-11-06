@@ -256,11 +256,25 @@ function apply(ctx: DshContext): void {
             try {
               if (route.action === 'restart') {
                 log('restart requested');
-                // Answer immediately — the helper creation takes a moment.
-                sendJson(res, 200, { ok: true, action: 'restart' });
-                // Create the successor FIRST, then exit: the helper is owned
-                // by the WMI service, so it outlives this process.
-                relaunchDetached(() => setTimeout(() => process.exit(0), 300));
+                // Answer only once the successor exists. The web client closes
+                // the window as soon as the response lands, and closing the
+                // window tears this process down; answering first therefore
+                // killed the app before the helper had been created, so nothing
+                // ever relaunched (2026-11-06 incident: "restart button dead").
+                let answered = false;
+                const answer = () => {
+                  if (answered) return;
+                  answered = true;
+                  sendJson(res, 200, { ok: true, action: 'restart' });
+                  setTimeout(() => process.exit(0), 300);
+                };
+                // execFile's own timeout is 20s; never leave the button spinning
+                // longer than that, and still answer if the helper failed.
+                const guard = setTimeout(answer, 8000);
+                relaunchDetached(() => {
+                  clearTimeout(guard);
+                  answer();
+                });
               } else {
                 log('close requested');
                 sendJson(res, 200, { ok: true, action: 'close' });
